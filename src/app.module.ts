@@ -23,17 +23,36 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (ConfigService: ConfigService) => ({
-        type: 'postgres',
-        host: ConfigService.get('DATABASE_HOST'),
-        port: Number(ConfigService.get('DATABASE_PORT')),
-        username: ConfigService.get('DATABASE_USER'),
-        password: ConfigService.get('DATABASE_PASSWORD'),
-        database: ConfigService.get('DATABASE_NAME'),
-        entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        synchronize: ConfigService.get('NODE_ENV') === 'development',
-        logging: ConfigService.get('NODE_ENV') === 'development',
-      }),
+      useFactory: (configService: ConfigService) => {
+        // Supabase/Render provides DATABASE_URL
+        const databaseUrl = configService.get('DATABASE_URL');
+
+        if (databaseUrl) {
+          // Production: Use DATABASE_URL from Supabase
+          return {
+            type: 'postgres',
+            url: databaseUrl,
+            entities: [__dirname + '/**/*.entity{.ts,.js}'],
+            synchronize: true, // Auto create tables
+            ssl: {
+              rejectUnauthorized: false,
+            },
+          };
+        }
+
+        // Development: Use individual environment variables
+        return {
+          type: 'postgres',
+          host: configService.get('DATABASE_HOST'),
+          port: Number(configService.get('DATABASE_PORT')),
+          username: configService.get('DATABASE_USER'),
+          password: configService.get('DATABASE_PASSWORD'),
+          database: configService.get('DATABASE_NAME'),
+          entities: [__dirname + '/**/*.entity{.ts,.js}'],
+          synchronize: configService.get('NODE_ENV') === 'development',
+          logging: configService.get('NODE_ENV') === 'development',
+        };
+      },
     }),
     AuditLogsModule,
     AuthModule,
@@ -46,7 +65,6 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
   controllers: [AppController],
   providers: [
     AppService,
-    // Global Guards - apply to all routes
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
