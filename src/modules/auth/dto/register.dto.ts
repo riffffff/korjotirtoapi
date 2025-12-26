@@ -1,27 +1,19 @@
-import { ApiProperty } from "@nestjs/swagger";
-import { IsEnum, IsNotEmpty, IsOptional, IsString, MinLength } from "class-validator";
-import { UserRole } from "../entities/user.entity";
+import { ApiProperty } from '@nestjs/swagger';
+import { IsNotEmpty, IsString, MinLength } from 'class-validator';
 
 export class RegisterDto {
-    @ApiProperty({ example: 'operator1' })
+    @ApiProperty({ example: 'johndoe' })
     @IsString()
-    @IsNotEmpty({ message: 'username is required' })
-    @MinLength(3, { message: 'username must be at least 3 characters' })
+    @IsNotEmpty()
     username: string;
 
     @ApiProperty({ example: 'password123' })
     @IsString()
-    @IsNotEmpty({ message: 'password is required' })
-    @MinLength(6, { message: 'password must be at least 6 characters' })
+    @MinLength(6)
     password: string;
 
-    @ApiProperty({ example: 'Operator User' })
+    @ApiProperty({ example: 'John Doe' })
     @IsString()
-    @IsNotEmpty({ message: 'name is required' })
+    @IsNotEmpty()
     name: string;
-
-    @ApiProperty({ example: 'operator', enum: UserRole, required: false })
-    @IsOptional()
-    @IsEnum(UserRole, { message: 'role must be admin, operator, or viewer' })
-    role?: UserRole;
 }

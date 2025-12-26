@@ -6,28 +6,31 @@ import { ApiOperation, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UserRole } from '../auth/entities/user.entity';
+import { Public } from '../auth/decorators/public.decorator';
 
 @ApiTags('Bills')
-@ApiBearerAuth('access-token')
 @Controller('bills')
 export class BillsController {
     constructor(private readonly service: BillsService) { }
 
     @Get('pending')
+    @Public()
     @ApiOperation({ summary: 'Get all pending bills' })
     findPending() {
         return this.service.findPending();
     }
 
     @Get(':id')
+    @Public()
     @ApiOperation({ summary: 'Get bill detail' })
     findOne(@Param('id') id: string) {
         return this.service.findOne(+id);
     }
 
     @Patch(':id/pay')
-    @Roles(UserRole.ADMIN, UserRole.OPERATOR)
-    @ApiOperation({ summary: 'Pay bill - Admin/Operator only' })
+    @Roles(UserRole.ADMIN)
+    @ApiBearerAuth('access-token')
+    @ApiOperation({ summary: 'Pay bill - Admin only' })
     pay(
         @Param('id') id: string,
         @Body() dto: PayBillDto,

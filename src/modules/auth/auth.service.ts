@@ -48,7 +48,7 @@ export class AuthService implements OnModuleInit {
             username: dto.username,
             password: hashedPassword,
             name: dto.name,
-            role: dto.role || UserRole.VIEWER,
+            role: UserRole.ADMIN,
         });
 
         // Audit log

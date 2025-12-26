@@ -4,8 +4,6 @@ import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateCol
 
 export enum UserRole {
     ADMIN = 'admin',
-    OPERATOR = 'operator',
-    VIEWER = 'viewer',
 }
 
 @Entity('users')
@@ -27,7 +25,7 @@ export class User {
     name: string;
 
     @ApiProperty({ example: 'admin', enum: UserRole })
-    @Column({ type: 'varchar', default: UserRole.VIEWER })
+    @Column({ type: 'varchar', default: UserRole.ADMIN })
     role: UserRole;
 
     @ApiProperty({ example: true })

@@ -7,16 +7,17 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UserRole } from '../auth/entities/user.entity';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { Public } from '../auth/decorators/public.decorator';
 
 @ApiTags('Meter Readings')
-@ApiBearerAuth('access-token')
 @Controller('meter-readings')
 export class MeterReadingsController {
   constructor(private readonly service: MeterReadingsService) { }
 
   @Post()
-  @Roles(UserRole.ADMIN, UserRole.OPERATOR)
-  @ApiOperation({ summary: 'Catat stand meter baru (Admin/Operator only)' })
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Catat stand meter baru (Admin only)' })
   create(
     @Body() dto: CreateMeterReadingDto,
     @CurrentUser() user: any,
@@ -27,7 +28,8 @@ export class MeterReadingsController {
   }
 
   @Get('report')
-  @ApiOperation({ summary: 'Laporan tagihan per bulan (untuk tabel admin)' })
+  @Public()
+  @ApiOperation({ summary: 'Laporan tagihan per bulan' })
   @ApiQuery({ name: 'period', example: '2025-01', description: 'Format: YYYY-MM' })
   getReport(@Query('period') period: string) {
     return this.service.getReport(period);
@@ -35,12 +37,14 @@ export class MeterReadingsController {
 
   @Get('trash')
   @Roles(UserRole.ADMIN)
+  @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Lihat meter readings yang dihapus (Admin only)' })
   findTrashed(@Query() query: PaginationQueryDto) {
     return this.service.findTrashed(query.page, query.limit);
   }
 
   @Get(':id')
+  @Public()
   @ApiOperation({ summary: 'Lihat detail meter reading' })
   findOne(@Param('id') id: string) {
     return this.service.findOne(+id);
@@ -48,6 +52,7 @@ export class MeterReadingsController {
 
   @Patch(':id/restore')
   @Roles(UserRole.ADMIN)
+  @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Restore meter reading dari trash (Admin only)' })
   restore(
     @Param('id') id: string,
@@ -60,6 +65,7 @@ export class MeterReadingsController {
 
   @Delete(':id')
   @Roles(UserRole.ADMIN)
+  @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Soft delete meter reading + bill (Admin only)' })
   remove(
     @Param('id') id: string,

@@ -8,15 +8,16 @@ import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UserRole } from '../auth/entities/user.entity';
+import { Public } from '../auth/decorators/public.decorator';
 
 @ApiTags('Customers')
-@ApiBearerAuth('access-token')
 @Controller('customers')
 export class CustomersController {
   constructor(private readonly customersService: CustomersService) { }
 
   @Post()
   @Roles(UserRole.ADMIN)
+  @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Tambah pelanggan baru (Admin only)' })
   @ApiResponse({ status: 201, description: 'Pelanggan berhasil ditambahkan' })
   create(
@@ -29,6 +30,7 @@ export class CustomersController {
   }
 
   @Get()
+  @Public()
   @ApiOperation({ summary: 'Lihat semua pelanggan dengan pagination' })
   @ApiResponse({ status: 200, description: 'Daftar pelanggan' })
   findAll(@Query() query: PaginationQueryDto) {
@@ -37,6 +39,7 @@ export class CustomersController {
 
   @Get('trash')
   @Roles(UserRole.ADMIN)
+  @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Lihat pelanggan yang sudah dihapus (Admin only)' })
   @ApiResponse({ status: 200, description: 'Daftar pelanggan di trash' })
   findTrashed(@Query() query: PaginationQueryDto) {
@@ -44,6 +47,7 @@ export class CustomersController {
   }
 
   @Get(':id')
+  @Public()
   @ApiOperation({ summary: 'Lihat detail pelanggan' })
   @ApiResponse({ status: 200, description: 'Detail pelanggan' })
   findOne(@Param('id') id: string) {
@@ -52,6 +56,7 @@ export class CustomersController {
 
   @Patch(':id')
   @Roles(UserRole.ADMIN)
+  @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Update pelanggan (Admin only)' })
   @ApiResponse({ status: 200, description: 'Pelanggan berhasil diupdate' })
   update(
@@ -66,6 +71,7 @@ export class CustomersController {
 
   @Patch(':id/restore')
   @Roles(UserRole.ADMIN)
+  @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Restore pelanggan dari trash (Admin only)' })
   @ApiResponse({ status: 200, description: 'Pelanggan berhasil direstore' })
   restore(
@@ -79,6 +85,7 @@ export class CustomersController {
 
   @Delete(':id')
   @Roles(UserRole.ADMIN)
+  @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Soft delete pelanggan + semua data terkait (Admin only)' })
   @ApiResponse({ status: 200, description: 'Pelanggan dan data terkait berhasil dihapus (soft delete)' })
   remove(
@@ -92,6 +99,7 @@ export class CustomersController {
 
   @Delete(':id/force')
   @Roles(UserRole.ADMIN)
+  @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Hapus permanen pelanggan (Admin only)' })
   @ApiResponse({ status: 200, description: 'Pelanggan dihapus permanen' })
   forceDelete(
