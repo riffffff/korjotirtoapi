@@ -1,5 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { Column, Entity, PrimaryGeneratedColumn, OneToOne, OneToMany, JoinColumn, CreateDateColumn, UpdateDateColumn } from "typeorm";
+import { Column, Entity, PrimaryGeneratedColumn, OneToOne, OneToMany, JoinColumn, CreateDateColumn, UpdateDateColumn, DeleteDateColumn } from "typeorm";
 import { MeterReading } from "../../meter-readings/entities/meter-reading.entity";
 import { BillItem } from "./bill-item.entity";
 
@@ -52,4 +52,7 @@ export class Bill {
 
     @UpdateDateColumn({ name: 'updated_at' })
     updatedAt: Date;
+
+    @DeleteDateColumn({ name: 'deleted_at' })
+    deletedAt: Date;
 }

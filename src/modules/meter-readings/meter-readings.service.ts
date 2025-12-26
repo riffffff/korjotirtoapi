@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, IsNull, Not } from 'typeorm';
 import { MeterReading } from './entities/meter-reading.entity';
 import { Customer } from '../customers/entities/customer.entity';
 import { Bill } from '../bills/entities/bill.entity';
@@ -10,15 +10,12 @@ import { CreateMeterReadingDto } from './dto/create-meter-reading.dto';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { AuditAction } from '../audit-logs/entities/audit-log.entity';
 
-// Validate period format (YYYY-MM)
 function isValidPeriodFormat(period: string): boolean {
   const regex = /^\d{4}-(0[1-9]|1[0-2])$/;
   if (!regex.test(period)) return false;
-
   const [year, month] = period.split('-').map(Number);
   if (year < 2000 || year > 2100) return false;
   if (month < 1 || month > 12) return false;
-
   return true;
 }
 
@@ -39,7 +36,6 @@ export class MeterReadingsService {
   ) { }
 
   async create(dto: CreateMeterReadingDto, performedBy = 'System', ipAddress?: string) {
-    // Validate period format
     if (!isValidPeriodFormat(dto.period)) {
       throw new BadRequestException(
         `Invalid period format "${dto.period}". Expected format: YYYY-MM (e.g., 2025-12)`
@@ -49,7 +45,6 @@ export class MeterReadingsService {
     const customer = await this.customerRepository.findOne({ where: { id: dto.customerId } });
     if (!customer) throw new NotFoundException('Customer not found');
 
-    // Check if already exists for this period
     const existing = await this.meterReadingRepository.findOne({
       where: { customerId: dto.customerId, period: dto.period },
     });
@@ -65,14 +60,12 @@ export class MeterReadingsService {
     const meterStart = lastReading ? lastReading.meterEnd : 0;
     const meterEnd = dto.meterEnd;
 
-    // Validate meterEnd > meterStart
     if (meterEnd < meterStart) {
       throw new BadRequestException(`meterEnd (${meterEnd}) must be greater than or equal to last reading (${meterStart})`);
     }
 
     const usage = meterEnd - meterStart;
 
-    // Use transaction to ensure atomicity - if bill creation fails, reading is also rolled back
     return this.dataSource.transaction(async (manager) => {
       const readingRepo = manager.getRepository(MeterReading);
       const billRepo = manager.getRepository(Bill);
@@ -110,24 +103,14 @@ export class MeterReadingsService {
       customer.outstandingBalance = Number(customer.outstandingBalance) + totalAmount;
       await customerRepo.save(customer);
 
-      // Create audit log
       await this.auditLogsService.log({
         action: AuditAction.CREATE,
         entityType: 'meter_readings',
         entityId: reading.id,
         performedBy,
         ipAddress,
-        details: {
-          customerId: customer.id,
-          customerName: customer.name,
-          period: dto.period,
-          meterStart,
-          meterEnd,
-          usage,
-          billId: bill.id,
-          totalAmount,
-        },
-        description: `Created meter reading for "${customer.name}" period ${dto.period} (usage: ${usage}m³, bill: Rp${totalAmount.toLocaleString('id-ID')})`,
+        details: { customerId: customer.id, customerName: customer.name, period: dto.period, usage, totalAmount },
+        description: `Created meter reading for "${customer.name}" period ${dto.period}`,
       });
 
       return {
@@ -154,7 +137,6 @@ export class MeterReadingsService {
   }
 
   async getReport(period: string) {
-    // Validate period format
     if (!isValidPeriodFormat(period)) {
       throw new BadRequestException(
         `Invalid period format "${period}". Expected format: YYYY-MM (e.g., 2025-12)`
@@ -176,10 +158,7 @@ export class MeterReadingsService {
       .orderBy('c.customerNumber', 'ASC')
       .getMany();
 
-    return {
-      period,
-      data: readings,
-    };
+    return { period, data: readings };
   }
 
   async findOne(id: number) {
@@ -201,44 +180,114 @@ export class MeterReadingsService {
     return r;
   }
 
+  // SOFT DELETE
   async remove(id: number, performedBy = 'System', ipAddress?: string) {
     const reading = await this.meterReadingRepository.findOne({
       where: { id },
-      relations: ['customer', 'bill'],
+      relations: ['customer', 'bill', 'bill.items'],
     });
     if (!reading) throw new NotFoundException('Data not found');
 
-    // Use transaction for deletion
     return this.dataSource.transaction(async (manager) => {
       const readingRepo = manager.getRepository(MeterReading);
+      const billRepo = manager.getRepository(Bill);
+      const billItemRepo = manager.getRepository(BillItem);
       const customerRepo = manager.getRepository(Customer);
 
+      // Update outstanding balance if pending
       if (reading.bill && reading.bill.paymentStatus === 'pending') {
         reading.customer.outstandingBalance =
           Number(reading.customer.outstandingBalance) - Number(reading.bill.totalAmount);
         await customerRepo.save(reading.customer);
       }
 
-      // Create audit log before deletion
+      // Soft delete bill items
+      if (reading.bill?.items) {
+        await billItemRepo.softRemove(reading.bill.items);
+      }
+
+      // Soft delete bill
+      if (reading.bill) {
+        await billRepo.softRemove(reading.bill);
+      }
+
+      // Soft delete reading
+      await readingRepo.softRemove(reading);
+
       await this.auditLogsService.log({
         action: AuditAction.DELETE,
         entityType: 'meter_readings',
         entityId: id,
         performedBy,
         ipAddress,
-        details: {
-          customerId: reading.customer?.id,
-          customerName: reading.customer?.name,
-          period: reading.period,
-          usage: reading.usage,
-          billId: reading.bill?.id,
-          billStatus: reading.bill?.paymentStatus,
-        },
-        description: `Deleted meter reading #${id} for "${reading.customer?.name}" period ${reading.period}`,
+        details: { customerId: reading.customer?.id, period: reading.period },
+        description: `Soft deleted meter reading #${id} for period ${reading.period}`,
       });
 
-      await readingRepo.remove(reading);
-      return { message: 'Data deleted successfully' };
+      return { message: 'Data soft deleted successfully' };
     });
+  }
+
+  // GET TRASHED
+  async findTrashed(page = 1, limit = 10) {
+    const [data, total] = await this.meterReadingRepository
+      .createQueryBuilder('r')
+      .leftJoin('r.customer', 'c')
+      .select(['r.id', 'r.period', 'r.usage', 'r.deletedAt', 'c.id', 'c.name', 'c.customerNumber'])
+      .withDeleted()
+      .where('r.deletedAt IS NOT NULL')
+      .orderBy('r.deletedAt', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    return {
+      data,
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
+  // RESTORE
+  async restore(id: number, performedBy = 'System', ipAddress?: string) {
+    const reading = await this.meterReadingRepository.findOne({
+      where: { id },
+      withDeleted: true,
+      relations: ['customer', 'bill', 'bill.items'],
+    });
+
+    if (!reading) throw new NotFoundException('Data not found');
+    if (!reading.deletedAt) throw new ConflictException('Data is not deleted');
+
+    // Restore reading
+    await this.meterReadingRepository.restore(id);
+
+    // Restore bill and items
+    if (reading.bill) {
+      await this.billRepository.restore(reading.bill.id);
+      if (reading.bill.items) {
+        for (const item of reading.bill.items) {
+          await this.billItemRepository.restore(item.id);
+        }
+      }
+
+      // Restore outstanding balance
+      if (reading.bill.paymentStatus === 'pending') {
+        reading.customer.outstandingBalance =
+          Number(reading.customer.outstandingBalance) + Number(reading.bill.totalAmount);
+        await this.customerRepository.save(reading.customer);
+      }
+    }
+
+    await this.auditLogsService.log({
+      action: AuditAction.UPDATE,
+      entityType: 'meter_readings',
+      entityId: id,
+      performedBy,
+      ipAddress,
+      details: { period: reading.period, action: 'restore' },
+      description: `Restored meter reading #${id} from trash`,
+    });
+
+    return { message: 'Data restored successfully' };
   }
 }

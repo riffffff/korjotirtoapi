@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Delete, Param, Query, Req } from '@nestjs/common';
+import { Controller, Get, Post, Body, Delete, Param, Query, Req, Patch } from '@nestjs/common';
 import type { Request } from 'express';
 import { MeterReadingsService } from './meter-readings.service';
 import { CreateMeterReadingDto } from './dto/create-meter-reading.dto';
@@ -6,6 +6,7 @@ import { ApiOperation, ApiTags, ApiQuery, ApiBearerAuth } from '@nestjs/swagger'
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UserRole } from '../auth/entities/user.entity';
+import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 
 @ApiTags('Meter Readings')
 @ApiBearerAuth('access-token')
@@ -32,15 +33,34 @@ export class MeterReadingsController {
     return this.service.getReport(period);
   }
 
+  @Get('trash')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Lihat meter readings yang dihapus (Admin only)' })
+  findTrashed(@Query() query: PaginationQueryDto) {
+    return this.service.findTrashed(query.page, query.limit);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Lihat detail meter reading' })
   findOne(@Param('id') id: string) {
     return this.service.findOne(+id);
   }
 
+  @Patch(':id/restore')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Restore meter reading dari trash (Admin only)' })
+  restore(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @Req() req: Request,
+  ) {
+    const ipAddress = req.ip || req.headers['x-forwarded-for']?.toString();
+    return this.service.restore(+id, user?.username, ipAddress);
+  }
+
   @Delete(':id')
   @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Hapus data (Admin only)' })
+  @ApiOperation({ summary: 'Soft delete meter reading + bill (Admin only)' })
   remove(
     @Param('id') id: string,
     @CurrentUser() user: any,

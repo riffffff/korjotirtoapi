@@ -35,6 +35,14 @@ export class CustomersController {
     return this.customersService.findAll(query.page, query.limit);
   }
 
+  @Get('trash')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Lihat pelanggan yang sudah dihapus (Admin only)' })
+  @ApiResponse({ status: 200, description: 'Daftar pelanggan di trash' })
+  findTrashed(@Query() query: PaginationQueryDto) {
+    return this.customersService.findTrashed(query.page, query.limit);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Lihat detail pelanggan' })
   @ApiResponse({ status: 200, description: 'Detail pelanggan' })
@@ -56,10 +64,23 @@ export class CustomersController {
     return this.customersService.update(+id, updateCustomerDto, user?.username, ipAddress);
   }
 
+  @Patch(':id/restore')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Restore pelanggan dari trash (Admin only)' })
+  @ApiResponse({ status: 200, description: 'Pelanggan berhasil direstore' })
+  restore(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @Req() req: Request,
+  ) {
+    const ipAddress = req.ip || req.headers['x-forwarded-for']?.toString();
+    return this.customersService.restore(+id, user?.username, ipAddress);
+  }
+
   @Delete(':id')
   @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Hapus pelanggan (Admin only)' })
-  @ApiResponse({ status: 200, description: 'Pelanggan berhasil dihapus' })
+  @ApiOperation({ summary: 'Soft delete pelanggan + semua data terkait (Admin only)' })
+  @ApiResponse({ status: 200, description: 'Pelanggan dan data terkait berhasil dihapus (soft delete)' })
   remove(
     @Param('id') id: string,
     @CurrentUser() user: any,
@@ -67,5 +88,18 @@ export class CustomersController {
   ) {
     const ipAddress = req.ip || req.headers['x-forwarded-for']?.toString();
     return this.customersService.remove(+id, user?.username, ipAddress);
+  }
+
+  @Delete(':id/force')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Hapus permanen pelanggan (Admin only)' })
+  @ApiResponse({ status: 200, description: 'Pelanggan dihapus permanen' })
+  forceDelete(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @Req() req: Request,
+  ) {
+    const ipAddress = req.ip || req.headers['x-forwarded-for']?.toString();
+    return this.customersService.forceDelete(+id, user?.username, ipAddress);
   }
 }
